@@ -42,33 +42,44 @@ def main():
             event = consumer.poll(1.0)
             if event is None:
                 continue
-            actual_voltage_v = double_deserializer(
-                event.value(), SerializationContext(topic, MessageField.VALUE)
-            )
-            raw_timestamp = event.timestamp()
-            actual_timestamp = datetime.fromtimestamp(raw_timestamp[1] // 1000)
-            if actual_voltage_v is not None:
-                print(
-                    f"Current voltage at {actual_timestamp} is {actual_voltage_v} volts"
-                )
+            consume_voltage_reading(event, topic, double_deserializer)
         except KeyboardInterrupt:
             break
     consumer.close()
 
 
-def get_consumer_config():
+def consume_voltage_reading(event, topic: str, double_deserializer):
+    """Consumes and deserializes the voltage reading"""
+    actual_voltage_v = double_deserializer(
+        event.value(), SerializationContext(topic, MessageField.VALUE)
+    )
+    raw_timestamp = event.timestamp()
+    actual_timestamp = datetime.fromtimestamp(raw_timestamp[1] // 1000)
+    if actual_voltage_v is not None:
+        print(f"Current voltage at {actual_timestamp} is {actual_voltage_v} volts")
+
+
+def get_consumer_config() -> dict:
     """Sets the configuration settings for the Kafka consumer
 
     For my configuration I have chosen to use Confluent Cloud
-
+    
+    NOTE: Uses the Azure Key Vault to retrieve the server and API configuration
+    details. Thus, Azure Key Vault will need to be configured before this function
+    can be used.
+    
     Returns the Kafka broker / consumer configuration as a dictionary
     """
+    bootstrap_server = retrieve_azure_secret('confluent-cloud-bootstrap-server-name')
+    api_key = retrieve_azure_secret('confluent-bootstrap-server-api-key')
+    api_secret = retrieve_azure_secret('confluent-cloud-server-api-secret')
+    
     consumer_config = {
-        "bootstrap.servers": "REMOVED.australiaeast.azure.confluent.cloud:9092",
+        "bootstrap.servers": f"{bootstrap_server}",
         "security.protocol": "SASL_SSL",
         "sasl.mechanism": "PLAIN",
-        "sasl.username": "REMOVED",
-        "sasl.password": "REMOVED",
+        "sasl.username": f"{api_key}",
+        "sasl.password": f"{api_secret}",
         "client.id": socket.gethostname(),
         "group.id": "solar_panel_voltage_app",
         "auto.offset.reset": "earliest",

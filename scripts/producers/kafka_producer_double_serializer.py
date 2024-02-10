@@ -34,7 +34,8 @@ from time import sleep
 # 3rd Party Imports
 from confluent_kafka import Producer
 
-# Custom Modules Import1
+# Custom Modules Import
+from credentials_management.credentials_funcs import retrieve_azure_secret
 from hardware import read_inputs
 
 # Globals
@@ -56,32 +57,33 @@ def main():
     try:
         while True:
             voltage = read_inputs.get_single_input_voltage(adc_channel)
-            producer.produce(
-                topic=topic,
-                key=key,
-                value=double_serializer(voltage),
-                on_delivery=callback,
-            )
-            print(f"Produced voltage of {voltage}V!")
+            produce_to_server(producer, topic, key, voltage)
             sleep(READINGS_SLEEP_TIME)
     except KeyboardInterrupt:
         pass
     producer.flush()
 
 
-def get_producer_config()->dict:
+def get_producer_config() -> dict:
     """Sets configuration settings for the Kafka Broker / Producer
 
     For my configuration I have chosen to use Confluent Cloud.
+    
+    NOTE: Uses the Azure Key Vault to retrieve the server and API configuration
+    details. Thus, Azure Key Vault will need to be configured before this function
+    can be used.
 
-    Returns the broker / producer configuration as a dictionary
+    Returns the Kafka broker / producer configuration as a dictionary
     """
+    bootstrap_server = retrieve_azure_secret('confluent-cloud-bootstrap-server-name')
+    api_key = retrieve_azure_secret('confluent-bootstrap-server-api-key')
+    api_secret = retrieve_azure_secret('confluent-cloud-server-api-secret')
     conf = {
-        "bootstrap.servers": "REMOVED.australiaeast.azure.confluent.cloud:9092",
+        "bootstrap.servers": f"{bootstrap_server}",
         "security.protocol": "SASL_SSL",
         "sasl.mechanism": "PLAIN",
-        "sasl.username": "REMOVED",
-        "sasl.password": "REMOVED",
+        "sasl.username": f"{api_key}",
+        "sasl.password": f"{api_secret}",
         "client.id": socket.gethostname(),
     }
     return conf
@@ -104,10 +106,18 @@ def double_serializer(num: float):
 
     Adapted from documentation code at:
     https://docs.confluent.io/platform/6.0/clients/confluent-kafka-python/html/_modules/confluent_kafka/serialization.html
-    
+
     Returns the voltage reading serialised into bytes
     """
     return struct.pack(">d", num)
+
+
+def produce_to_server(producer, topic: str, key: str, voltage: float):
+    """Sends the voltage data to the Confluent Cloud server"""
+    producer.produce(
+        topic=topic, key=key, value=double_serializer(voltage), on_delivery=callback
+    )
+    print(f"Produced voltage of {voltage}V!")
 
 
 if __name__ == "__main__":

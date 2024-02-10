@@ -41,6 +41,7 @@ My project doesn't actually measure this - just for fun.
 """
 # Standard Library Imports
 import socket
+import sys
 from time import sleep
 
 # 3rd Party Imports
@@ -51,6 +52,7 @@ from confluent_kafka.schema_registry.json_schema import JSONSerializer
 
 
 # Custom Modules Import
+from credentials_management.credentials_funcs import retrieve_azure_secret
 from hardware import read_inputs
 
 # Globals
@@ -82,14 +84,7 @@ def main():
     try:
         while True:
             voltage = read_inputs.get_single_input_voltage(adc_channel)
-            producer.produce(
-                topic=topic,
-                key=key,
-                value=json_serializer(
-                    voltage, SerializationContext(topic, MessageField.VALUE)
-                ),
-                on_delivery=delivery_report,
-            )
+            produce_to_server(producer, topic, key, voltage, json_serializer)
             print(f"Produced voltage of {voltage}V!")
             sleep(READINGS_SLEEP_TIME)
     except KeyboardInterrupt:
@@ -97,37 +92,50 @@ def main():
     producer.flush()
 
 
-def get_producer_config()->dict:
+def get_producer_config() -> dict:
     """Sets configuration settings for the Kafka Broker / Producer
 
     For my configuration I have chosen to use Confluent Cloud.
+    
+    NOTE: Uses the Azure Key Vault to retrieve the server and API configuration
+    details. Thus, Azure Key Vault will need to be configured before this function
+    can be used.
 
     Returns the Kafka broker / producer configuration as a dictionary
     """
+    bootstrap_server = retrieve_azure_secret('confluent-cloud-bootstrap-server-name')
+    api_key = retrieve_azure_secret('confluent-bootstrap-server-api-key')
+    api_secret = retrieve_azure_secret('confluent-cloud-server-api-secret')
     conf = {
-        "bootstrap.servers": "REMOVED.australiaeast.azure.confluent.cloud:9092",
+        "bootstrap.servers": f"{bootstrap_server}",
         "security.protocol": "SASL_SSL",
         "sasl.mechanism": "PLAIN",
-        "sasl.username": "REMOVED",
-        "sasl.password": "REMOVED",
+        "sasl.username": f"{api_key}",
+        "sasl.password": f"{api_secret}",
         "client.id": socket.gethostname(),
     }
     return conf
 
-
-def get_schema_registry_config()->dict:
+def get_schema_registry_config() -> dict:
     """Sets configuration settings for the Kafka Schema Registry
 
     For my configuration I have chosen to use Confluent Cloud.
-
-    Returns the Kafka Schema Registry configuration as a dictionary
-
-    NOTE: The schema should be defined on the topic using Confluent Cloud 
+    
+    NOTE 1: The schema should be defined on the topic using Confluent Cloud
     before using this function.
+    
+    NOTE 2: Uses the Azure Key Vault to retrieve the server and API configuration
+    details. Thus, Azure Key Vault will need to be configured before this function
+    can be used.
+    
+    Returns the Kafka Schema Registry configuration as a dictionary
     """
+    schema_server = retrieve_azure_secret('confluent-cloud-schema-registry-server-name')
+    schema_api_key = retrieve_azure_secret('confluent-cloud-schema-api-key')
+    schema_api_secret = retrieve_azure_secret('confluent-cloud-schema-api-secret')
     sr_config = {
-        "url": "REMOVED.australia-southeast1.gcp.confluent.cloud",
-        "basic.auth.user.info": "REMOVED",
+        "url": f"{schema_server}",
+        "basic.auth.user.info": f"{schema_api_key}:{schema_api_secret}"
     }
     return sr_config
 
@@ -140,7 +148,7 @@ def delivery_report(err, event):
         print(f'Reading for {event.key().decode("utf8")} produced to {event.topic()}')
 
 
-def get_schema_str()->str:
+def get_schema_str() -> str:
     """Defines the schema that the produced JSON should adhere to
 
     NOTE: For my configuration I have chosen to use Confluent Cloud.
@@ -180,7 +188,7 @@ def get_schema_str()->str:
     return schema_str
 
 
-def voltage_to_dict(voltage: float, ctx)->dict:
+def voltage_to_dict(voltage: float, ctx) -> dict:
     """Converts the voltage readings to a dictionary that can be used
     with the JSON Schema
 
@@ -196,6 +204,16 @@ def voltage_to_dict(voltage: float, ctx)->dict:
         "panel_producing": "SOLAR_PANEL_1",
         "voltage_volts": voltage,
     }
+
+
+def produce_to_server(producer, topic: str, key: str, voltage: float, json_serializer):
+    """Produces the JSON data to the Confluent Cloud server"""
+    producer.produce(
+        topic=topic,
+        key=key,
+        value=json_serializer(voltage, SerializationContext(topic, MessageField.VALUE)),
+        on_delivery=delivery_report,
+    )
 
 
 if __name__ == "__main__":

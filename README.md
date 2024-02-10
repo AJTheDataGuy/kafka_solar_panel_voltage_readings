@@ -4,7 +4,7 @@ This project consists of a real-time streaming analytics data pipeline that uses
 
 # Pipeline Architecture
 
-<img src='Images/architecture.png' width='600'>
+<img src='Images/architecture.png' width='700'>
 
 # Hardware Setup
 
@@ -21,7 +21,7 @@ Note: You'll also need a monitor, mouse, and keyboard for the Raspberry Pi
 
 5. Other electronics hobby equipment: wires, solder, soldering iron, voltmeter, etc.
 
-<img src='Images/hardware_turned_on.jpeg' width='200'>
+<img src='Images/hardware_turned_on.jpeg' width='300'>
 
 # Software Setup
 
@@ -33,9 +33,13 @@ This repo requires the following python libraries to be installed to run properl
 
 2. [Adafruit-ADS1x15](https://pypi.org/project/Adafruit-ADS1x15/) (for the ADS1115)
 
-You will also need to add your own Kafka cluster configurations and authentication details to the scripts.
+3. [azure-identity](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-python?tabs=azure-cli) (for Azure Key Vault)
 
-In addition, I am using two Kafka Connect connectors provided by Confluent Cloud:
+4. [azure-keyvault-secrets](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-python?tabs=azure-cli) (for Azure Key Vault)
+
+You will need to ensure that you have set up your Azure Key Vault and local environment variables to connect to Azure Key Vault before using these scripts. The Kafka cluster configurations and authentication details depend on being able to communicate with Azure Key Vault. 
+
+In addition to the basic Kafka configuration I am also using two Kafka Connect connectors provided by Confluent Cloud:
 
 1. ElasticSearch Service Sink
 
@@ -43,7 +47,7 @@ In addition, I am using two Kafka Connect connectors provided by Confluent Cloud
 
 JSON configuration files for these connectors are provided with this repo in the "Connector Configs" folder
 
-<img src='Images/connectors1.png' width='400'>
+<img src='Images/connectors1.png' width='600'>
 
 # Acknowledgement
 

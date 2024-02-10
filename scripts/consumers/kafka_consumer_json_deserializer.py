@@ -30,12 +30,17 @@ My project doesn't actually measure this - just for fun.
 This script is an alternative to the double_deserializer script
 and allows for more complex information to be consumed.
 """
+# Standard Library Imports
 import socket
 from datetime import datetime
+
+# 3rd Party Imports
 from confluent_kafka import Consumer
 from confluent_kafka.serialization import SerializationContext, MessageField
 from confluent_kafka.schema_registry.json_schema import JSONDeserializer
 
+# Custom Module Imports
+from credentials_management.credentials_funcs import retrieve_azure_secret
 
 def main():
     """main"""
@@ -54,33 +59,46 @@ def main():
             event = consumer.poll(1.0)
             if event is None:
                 continue
-            reading = json_deserializer(
-                event.value(), SerializationContext(topic, MessageField.VALUE)
-            )
-            raw_timestamp = event.timestamp()
-            real_timestamp = datetime.fromtimestamp(raw_timestamp[1] // 1000)
-            if reading is not None:
-                print(
-                    f"Voltage from {reading.panel_producing} at {real_timestamp} is {reading.voltage_volts} volts. Connection OK: {str(reading.connection_ok)} "
-                )
+            consume_voltage_reading(event, json_deserializer, topic)
         except KeyboardInterrupt:
             break
     consumer.close()
+
+
+def consume_voltage_reading(event, json_deserializer, topic):
+    """Consumes and deserializes the voltage reading"""
+    reading = json_deserializer(
+        event.value(), SerializationContext(topic, MessageField.VALUE)
+    )
+    raw_timestamp = event.timestamp()
+    real_timestamp = datetime.fromtimestamp(raw_timestamp[1] // 1000)
+    if reading is not None:
+        print(
+            f"Voltage from {reading.panel_producing} at {real_timestamp} is {reading.voltage_volts} volts. Connection OK: {str(reading.connection_ok)} "
+        )
 
 
 def get_consumer_config() -> dict:
     """Sets the configuration settings for the Kafka consumer
 
     For my configuration I have chosen to use Confluent Cloud
-
+    
+    NOTE: Uses the Azure Key Vault to retrieve the server and API configuration
+    details. Thus, Azure Key Vault will need to be configured before this function
+    can be used.
+    
     Returns the Kafka broker / consumer configuration as a dictionary
     """
+    bootstrap_server = retrieve_azure_secret('confluent-cloud-bootstrap-server-name')
+    api_key = retrieve_azure_secret('confluent-bootstrap-server-api-key')
+    api_secret = retrieve_azure_secret('confluent-cloud-server-api-secret')
+    
     consumer_config = {
-        "bootstrap.servers": "REMOVED.australiaeast.azure.confluent.cloud:9092",
+        "bootstrap.servers": f"{bootstrap_server}",
         "security.protocol": "SASL_SSL",
         "sasl.mechanism": "PLAIN",
-        "sasl.username": "REMOVED",
-        "sasl.password": "REMOVED",
+        "sasl.username": f"{api_key}",
+        "sasl.password": f"{api_secret}",
         "client.id": socket.gethostname(),
         "group.id": "solar_panel_voltage_app",
         "auto.offset.reset": "earliest",
