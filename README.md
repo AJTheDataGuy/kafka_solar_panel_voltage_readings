@@ -49,6 +49,12 @@ JSON configuration files for these connectors are provided with this repo in the
 
 <img src='Images/connectors1.png' width='600'>
 
+# Presentation at the Perth Data Engineering Meetup Group
+
+I had the pleasure of giving a talk about this project in February 2024 to the Perth Data Engineering Meetup Group. Please click the "Presentation" folder to see the presentation as a PowerPoint file. The exact meetup can also be viewed [by clicking here.](https://www.meetup.com/perth-data-engineering-meetup/events/299029840/)
+
+<img src='Images/fun_with_pi.png' width='600'>
+
 # Acknowledgement
 
 I would like to thank Sean Law for helping me learn about and configure the hardware side of this project - soldering, wiring, pinout configurations, etc. Thank you Sean!
